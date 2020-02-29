@@ -1,0 +1,17 @@
+{
+  "name": "julia-ast-bot",
+  "version": "1.0.1",
+  "description": "This is a simple reminder bot made by Ari Davis (AA19-1), Junaedi Dede (JU19-1) and Alicia (LI19-1).",
+  "main": "index.jsx",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ari Davis",
+  "license": "ISC",
+  "dependencies": {
+    "DateValidator": "^1.0.5",
+    "axios": "^0.19.2",
+    "telegraf": "^3.36.0",
+    "telegraf-calendar-telegram": "^1.5.7"
+  }
+}
