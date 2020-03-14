@@ -58,9 +58,7 @@ function getCurrentReminders() {
           e.chat_id,
           "Hi " + e.firstname + ", it is time to " + e.description
         );
-        axios.delete(URL + "reminder/" + e.id).then((res) => {
-  
-        });
+        axios.delete(URL + "reminder/" + e.id).then((res) => {});
       });
     });
 }
@@ -119,14 +117,15 @@ bot.command("showreminders", (ctx) => {
 bot.command("updatereminder", (ctx) => {
   var reminders = [];
   var keyboards = [];
+
   axios
     .get(URL + "user/" + ctx.message.from.id + "/reminders")
     .then((res) => {
       res.data.map((e) => {
         keyboardData = {
-          'header' : 'update',
-          'r_id' : e.id
-        }
+          header: "update",
+          r_id: e.id
+        };
         keyboards.push(
           Markup.callbackButton(
             `${e.description} - ${e.remind_full_date}`,
@@ -137,6 +136,9 @@ bot.command("updatereminder", (ctx) => {
     })
     .then(() => {
       if (keyboards.length > 0) {
+        userId = ctx.message.from.id;
+        if (!state[userId]) state[userId] = {};
+        state[userId].isUpdating = true
         return ctx.reply(
           `Please choose which reminder you want to update.`,
           Markup.inlineKeyboard(keyboards).extra()
@@ -146,6 +148,39 @@ bot.command("updatereminder", (ctx) => {
       }
     });
 });
+
+bot.command("deletereminder", ctx => { 
+  var keyboards = []
+  axios
+    .get(URL + "user/" + ctx.message.from.id + "/reminders")
+    .then((res) => {
+      res.data.map((e) => {
+        keyboardData = {
+          header: "delete",
+          r_id: e.id
+        };
+        keyboards.push(
+          Markup.callbackButton(
+            `${e.description} - ${e.remind_full_date}`,
+            JSON.stringify(keyboardData)
+          )
+        );
+      });
+    })
+    .then(() => {
+      if (keyboards.length > 0) {
+        userId = ctx.message.from.id;
+        if (!state[userId]) state[userId] = {};
+        state[userId].isDeleting = true
+        return ctx.reply(
+          `Please choose a reminder you want to delete.`,
+          Markup.inlineKeyboard(keyboards).extra()
+        );
+      } else {
+        return ctx.reply("Sorry, but you don't have any reminder.");
+      }
+    });
+})
 
 bot.command("about", (ctx) => {
   return ctx.reply(
@@ -181,15 +216,44 @@ bot.on("callback_query", (ctx) => {
       return ctx.reply("Cancelled");
     } else if (data.header === "accept") {
       const newReminder = state[userId].newReminder;
-      if (state[userId].newReminder.command === "add_new_reminder_accept_no") {
-        addNewReminderAcceptReject(newReminder, ctx);
+      if(state[userId].isDeleting != null){
+        deleteReminderAcceptReject(ctx)
       }
-    }
+      else if (state[userId].newReminder && state[userId].newReminder.command === "add_new_reminder_accept_no") {
+        if(state[userId].isUpdating != null){
+          updateReminderAcceptReject(newReminder, ctx)
+        }
+        else{
+          addNewReminderAcceptReject(newReminder, ctx);
+        }
+        state[userId] = null
+      }
+      
+    } 
+    else if (data.header === "delete") {
+      reminderId = data.r_id;
+      state[userId].updateChatId = reminderId
+      var keyboardDataYes = {
+        header: "accept",
+        userId: userId
+      };
+      var keyboardDataNo = {
+        header: "cancel",
+        userId: userId
+      };
+      ctx.reply(
+        `Are you sure to delete this reminder?`,
+        
+        Markup.inlineKeyboard([
+          Markup.callbackButton("Yes", JSON.stringify(keyboardDataYes)),
+          Markup.callbackButton("No", JSON.stringify(keyboardDataNo))
+        ]).extra()
+      );
 
-    else if(data.header === 'update'){
-      console.log("meong")
-      reminderId = data.r_id
-      state[userId] = {};
+    }
+    else if (data.header === "update") {
+      reminderId = data.r_id;
+      state[userId].updateChatId = reminderId
       updatingState(userId, "add_new_reminder");
       var keyboardData = {
         header: "cancel",
@@ -290,6 +354,59 @@ function gettingNewReminderDescription(userId, text, ctx, command) {
   );
 }
 
+function deleteReminderAcceptReject(ctx){
+  userId = ctx.update.callback_query.from.id
+
+  chatId = state[userId].updateChatId
+  
+  axios
+    .delete(URL + "reminder/" + chatId , {
+      headers: {
+        "Content-Type": "application/json"
+      }
+    })
+    .then((res) => {
+      ctx.reply("OK, your reminder has been deleted!");
+      state[userId] = null;
+    })
+    .catch((error) => {
+      ctx.reply("I'm sorry, but I'm waiting my creator to fix my bug.");
+      state[userId] = null;
+    });
+}
+
+function updateReminderAcceptReject(newReminder, ctx){
+  userId = ctx.update.callback_query.from.id
+
+  chatId = state[userId].updateChatId
+  postData = {
+    id : chatId,
+    description: newReminder.description,
+    remind_date: new Date(
+      `${newReminder.time.year}-${newReminder.time.month}-${newReminder.time.date} ${newReminder.time.time}`
+    ).getTime(),
+    remind_full_date: `${newReminder.time.year}-${newReminder.time.month}-${newReminder.time.date} ${newReminder.time.time}`,
+    chat_id: ctx.update.callback_query.message.chat.id,
+    user_id: userId,
+    firstname: ctx.update.callback_query.from.first_name,
+    lastname: ctx.update.callback_query.from.last_name
+  };
+  axios
+    .put(URL + "reminder/" + chatId , postData, {
+      headers: {
+        "Content-Type": "application/json"
+      }
+    })
+    .then((res) => {
+      ctx.reply("OK, your reminder has been updated!");
+      state[userId] = null;
+    })
+    .catch((error) => {
+      ctx.reply("I'm sorry, but I'm waiting my creator to fix my bug.");
+      state[userId] = null;
+    });
+}
+
 function addNewReminderAcceptReject(newReminder, ctx) {
   postData = {
     description: newReminder.description,
@@ -298,7 +415,7 @@ function addNewReminderAcceptReject(newReminder, ctx) {
     ).getTime(),
     remind_full_date: `${newReminder.time.year}-${newReminder.time.month}-${newReminder.time.date} ${newReminder.time.time}`,
     chat_id: ctx.update.callback_query.message.chat.id,
-    user_id: userId,
+    user_id: ctx.update.callback_query.message.from.id,
     firstname: ctx.update.callback_query.from.first_name,
     lastname: ctx.update.callback_query.from.last_name
   };
@@ -316,4 +433,4 @@ function addNewReminderAcceptReject(newReminder, ctx) {
       ctx.reply("I'm sorry, but I'm waiting my creator to fix my bug.");
       state[userId] = null;
     });
-}
+} 
