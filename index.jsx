@@ -94,9 +94,11 @@ bot.command("addreminder", (ctx) => {
 
 bot.command("showreminders", (ctx) => {
   var reminders = [];
+  console.log(ctx.message)
   axios
     .get(URL + "user/" + ctx.message.from.id + "/reminders")
     .then((res) => {
+      console.log(res.data)
       res.data.map((e) => {
         reminders.push(e);
       });
@@ -408,6 +410,7 @@ function updateReminderAcceptReject(newReminder, ctx){
 }
 
 function addNewReminderAcceptReject(newReminder, ctx) {
+  console.log(ctx.update.callback_query)
   postData = {
     description: newReminder.description,
     remind_date: new Date(
@@ -415,7 +418,7 @@ function addNewReminderAcceptReject(newReminder, ctx) {
     ).getTime(),
     remind_full_date: `${newReminder.time.year}-${newReminder.time.month}-${newReminder.time.date} ${newReminder.time.time}`,
     chat_id: ctx.update.callback_query.message.chat.id,
-    user_id: ctx.update.callback_query.message.from.id,
+    user_id: ctx.update.callback_query.from.id,
     firstname: ctx.update.callback_query.from.first_name,
     lastname: ctx.update.callback_query.from.last_name
   };
